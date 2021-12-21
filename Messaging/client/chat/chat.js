@@ -19,7 +19,8 @@ import Fab from '@material-ui/core/Fab';
 import SendIcon from '@material-ui/icons/Send';
 import { io } from 'socket.io-client'
 import { list } from '../user/api-user'
-import { Button } from '@material-ui/core'
+import { Button, IconButton } from '@material-ui/core'
+import AttachFileIcon from '@material-ui/icons/AttachFile';
 
 // const useStyles = makeStyles(theme => ({
 //   card: {
@@ -177,8 +178,14 @@ export default function Chat() {
     }
   }
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0]
+    socket.emit('fileUpload', file)
+  }
+
   return (
     <div>
+
       <Grid container>
         <Grid item xs={12} >
           <Typography variant="h5" className="header-message">TechHack</Typography>
@@ -197,6 +204,8 @@ export default function Chat() {
               </ListItem>
             )}
           </List>
+          <video width="100%" height="250"  controls></video>
+
           {/* <Divider />
                 <Grid item xs={12} style={{padding: '10px'}}>
                     <TextField id="outlined-basic-email" label="Search" variant="outlined" fullWidth />
@@ -204,6 +213,8 @@ export default function Chat() {
                 <Divider /> */}
 
         </Grid>
+        {/* <video>working</video> */}
+
         <Grid item xs={9}>
           <List className={classes.messageArea}>
             {messages.map((message, index) => {
@@ -228,7 +239,17 @@ export default function Chat() {
               />
             </Grid>
             <Grid xs={1} align="right">
+              <Fab color="primary"
+              >
+                <label htmlFor='uploadButton'>
+                  <input type="file" style={{ display: 'none' }} id="uploadButton" />
+
+                  <AttachFileIcon onClick={handleFileUpload} /></label>
+              </Fab>
+
+
               <Fab color="primary" aria-label="add" onClick={handleSendMessage}><SendIcon /></Fab>
+
             </Grid>
           </Grid>
         </Grid>

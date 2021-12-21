@@ -21,14 +21,18 @@ const messageHandlers = (io, socket) => {
 
     const getMessages = async (senderId, receiverId, callback) => {
         let query = {}
-        query["senderId"] = {$in: [senderId, receiverId] }
-        query["receiverId"] = {$in: [senderId, receiverId] }
+        query["senderId"] = { $in: [senderId, receiverId] }
+        query["receiverId"] = { $in: [senderId, receiverId] }
 
         console.log(senderId, receiverId)
         const messages = await Message.find(query)
         callback(messages)
         // console.log(messages)
 
+    }
+
+    const handleFileUpload = async (file) => {
+        console.log(file)
     }
 
     socket.on('joinRoom', joinRoom)
@@ -38,6 +42,7 @@ const messageHandlers = (io, socket) => {
     })
 
     socket.on('getMessages', getMessages)
+    socket.on('fileUpload', handleFileUpload)
 }
 
 export default messageHandlers

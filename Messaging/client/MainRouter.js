@@ -26,3 +26,31 @@ const MainRouter = () => {
 }
 
 export default MainRouter
+
+
+/*
+uploading files:
+client uploads file
+client clicks send
+
+strat1:
+http put request is sent to server with the file and receiver detail 
+in a formdata
+use multer to read file and upload to aws
+emit fileReceive event to the receivers socket with io instance
+receiver listens to the event => http get req is sent to retrieve file
+
+
+strat2:
+
+fileupload event is sent with file
+server listens to event => saves file in aws => emits file url
+to receiver with a receive event
+receiver gets event and sends http get req to server
+
+
+
+
+
+
+*/
