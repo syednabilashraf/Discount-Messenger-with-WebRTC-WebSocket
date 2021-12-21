@@ -182,7 +182,6 @@ export default function Chat() {
     const file = e.target.files[0]
     socket.emit('fileUpload', file)
   }
-
   return (
     <div>
 
