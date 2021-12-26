@@ -75,6 +75,7 @@ const socket = io('http://localhost:3000/', {
     user
   }
 });
+let myPeerConnection;
 
 export default function Chat() {
 
@@ -82,7 +83,9 @@ export default function Chat() {
   const [socketInstance, setSocketInstance] = useState()
   const [messages, setMessages] = useState([])
   const [screenStream, setScreenStream] = useState("")
-  const screenStreamRef = useRef()
+  const localScreenStreamRef = useRef()
+  const remoteScreenStreamRef = useRef()
+
 
 
   useEffect(() => {
@@ -142,6 +145,13 @@ export default function Chat() {
 
   const [sender, setSender] = useState('')
   const [receiver, setReceiver] = useState('')
+  const mediaConstraints = {
+    video: {
+      cursor: 'always' | 'motion' | 'never',
+      displaySurface: 'application' | 'browser' | 'monitor' | 'window'
+
+    }
+  }
   // const sample = [{
   //   senderId: 1,
   //   receiverId: 2,
@@ -180,24 +190,103 @@ export default function Chat() {
     socket.emit('fileUpload', file)
   }
 
+  const handleNegotiationNeededEvent = () => {
+    myPeerConnection?.createOffer().then(function (offer) {
+      return myPeerConnection?.setLocalDescription(offer);
+    })
+      .then(function () {
+        socket.emit("videoOffer", sender, receiver, myPeerConnection.localDescription)
+        // sendToServer({
+        //   name: sender,
+        //   target: receiver,
+        // type: "video-offer",
+        //   sdp: myPeerConnection.localDescription
+        // });
+      })
+      .catch((err) => {
+        console.log(err)
+      });
+  }
+
+  const handleVideoOfferMsg = (msg) => {
+    var localStream = null;
+
+    let targetUsername = msg.name;
+    createPeerConnection();
+
+    var desc = new RTCSessionDescription(msg.sdp);
+
+    myPeerConnection?.setRemoteDescription(desc).then(function () {
+      return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    })
+      .then(function (stream) {
+        localStream = stream;
+        localScreenStreamRef.current.srcObject = localStream
+        localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
+
+      })
+      .then(function () {
+        return myPeerConnection?.createAnswer();
+      })
+      .then(function (answer) {
+        return myPeerConnection?.setLocalDescription(answer);
+      })
+      .then(function () {
+        // var msg = {
+        //   name: myUsername,
+        //   target: targetUsername,
+        //   type: "video-answer",
+        //   sdp: myPeerConnection?.localDescription
+        // };
+
+        // sendToServer(msg);
+        socket.emit("sendVideoAnswer", sender, receiver, myPeerConnection?.localDescription)
+
+      })
+      .catch(handleGetUserMediaError);
+  }
+
+  const createPeerConnection = () => {
+    myPeerConnection = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:stun.stunprotocol.org"
+        }
+      ]
+    });
+
+    // myPeerConnection.onicecandidate = handleICECandidateEvent;
+    // myPeerConnection.ontrack = handleTrackEvent;
+    myPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
+    // myPeerConnection.onremovetrack = handleRemoveTrackEvent;
+    // myPeerConnection.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
+    // myPeerConnection.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
+    // myPeerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
+  }
+
   const handleScreenShare = (e) => {
-    createPee
-    console.log("Screen sharing")
-    const mediaConstraints = {
-      video: {
-        cursor: 'always' | 'motion' | 'never',
-        displaySurface: 'application' | 'browser' | 'monitor' | 'window'
+
+    if (myPeerConnection) {
+      console.log("You are already connected")
+    }
+    else {
+      //create peerconnection
+      //get stream and append all track in stream to the peerConnection
+      //
+      createPeerConnection()
+      console.log("Screen sharing")
+      
 
       }
-
+      navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
+        console.log("Got stream: ", stream)
+        localScreenStreamRef.current.srcObject = stream
+        stream.getTracks().forEach(track => myPeerConnection.addTrack(track, stream))
+      }).catch(error => {
+        console.error('Error accessing media devices.', error);
+      });
     }
-    navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
-      console.log("Got stream: ", stream)
-      screenStreamRef.current.srcObject = stream
-      setScreenStream(stream)
-    }).catch(error => {
-      console.error('Error accessing media devices.', error);
-    });
+
   }
   return (
     <div>
@@ -220,9 +309,12 @@ export default function Chat() {
               </ListItem>
             )}
           </List>
-          <video width="100%" height="250" autoPlay playsInline controls="false" ref={screenStreamRef}
+          <video width="100%" height="250" autoPlay playsInline controls="false" ref={localScreenStreamRef}
 
           ></video>
+           <video width="100%" height="250" autoPlay playsInline controls="false" ref={remoteScreenStreamRef}
+
+></video>
 
           {/* <Divider />
                 <Grid item xs={12} style={{padding: '10px'}}>
