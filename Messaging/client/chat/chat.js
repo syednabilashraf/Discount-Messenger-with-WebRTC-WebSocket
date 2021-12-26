@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { makeStyles } from '@material-ui/core/styles'
 import Card from '@material-ui/core/Card'
 import CardContent from '@material-ui/core/CardContent'
@@ -21,6 +21,9 @@ import { io } from 'socket.io-client'
 import { list } from '../user/api-user'
 import { Button, IconButton } from '@material-ui/core'
 import AttachFileIcon from '@material-ui/icons/AttachFile';
+import CallIcon from '@material-ui/icons/Call';
+import VideoCallIcon from '@material-ui/icons/VideoCall';
+import ScreenShareIcon from '@material-ui/icons/ScreenShare';
 
 // const useStyles = makeStyles(theme => ({
 //   card: {
@@ -66,44 +69,55 @@ const useStyles = makeStyles({
     overflowY: 'auto'
   }
 });
+const { user } = JSON.parse(sessionStorage.getItem('jwt'))
+const socket = io('http://localhost:3000/', {
+  auth: {
+    user
+  }
+});
 
 export default function Chat() {
 
   const [textMessage, setTextMessage] = useState('')
   const [socketInstance, setSocketInstance] = useState()
+  const [messages, setMessages] = useState([])
+  const [screenStream, setScreenStream] = useState("")
+  const screenStreamRef = useRef()
+
+
   useEffect(() => {
     list().then(data => {
       console.log(data)
       setUsers(data)
     })
-    const { user } = JSON.parse(sessionStorage.getItem('jwt'))
+    // const { user } = JSON.parse(sessionStorage.getItem('jwt'))
     setSender(user._id)
+
+
     console.log(user)
 
-    const socket = io('http://localhost:3000/', {
-      auth: {
-        user
-      }
-    });
 
 
-    setSocketInstance(socket)
-    socket.on('connect', () => {
-      console.log('connected')
-    })
-
-    socket.on('receiveMessage', (message) => {
-      console.log(messages.concat(message))
-      setMessages(messages.concat(message))
-    })
 
 
     return function cleanup() {
       socket.disconnect()
     }
   }, [])
+  if (socket) {
+    socket.on('connect', () => {
+      console.log('connected')
+    })
+
+    socket.on('receiveMessage', (message) => {
+      // console.log(messages.concat(message))
+      setMessages(messages.concat(message))
+      console.log(messages)
+    })
+  }
 
   const handleSendMessage = () => {
+    console.log(messages)
     console.log(textMessage)
     const messageDetails = {
 
@@ -113,8 +127,8 @@ export default function Chat() {
       createdAt: Date.now()
 
     }
-    socketInstance?.emit('sendMessage', messageDetails)
-    setMessages(messages.concat(messageDetails))
+    socket.emit('sendMessage', messageDetails)
+    setMessages([...messages, messageDetails])
     setTextMessage('')
   }
 
@@ -125,23 +139,6 @@ export default function Chat() {
   const classes = useStyles()
 
   const [users, setUsers] = useState([])
-  const [messages, setMessages] = useState([{
-    senderId: 1,
-    receiverId: 2,
-    message: "Hey man, What's up ?",
-  }, {
-    senderId: 2,
-    receiverId: 1,
-    message: "Hey, I am Good! What about you ?",
-  }, {
-    senderId: 1,
-    receiverId: 2,
-    message: "Cool. i am good, let's catch up!",
-  }, {
-    senderId: 2,
-    receiverId: 1,
-    message: "chotto mattee",
-  }])
 
   const [sender, setSender] = useState('')
   const [receiver, setReceiver] = useState('')
@@ -169,7 +166,7 @@ export default function Chat() {
   const handleReceiverSelection = (user) => () => {
     console.log(sender, user._id)
     if (sender != user._id) {
-      socketInstance.emit('getMessages', sender, user._id, (messages) => {
+      socket.emit('getMessages', sender, user._id, (messages) => {
         console.log('messages', messages)
         setMessages(messages)
       })
@@ -182,6 +179,26 @@ export default function Chat() {
     const file = e.target.files[0]
     socket.emit('fileUpload', file)
   }
+
+  const handleScreenShare = (e) => {
+    createPee
+    console.log("Screen sharing")
+    const mediaConstraints = {
+      video: {
+        cursor: 'always' | 'motion' | 'never',
+        displaySurface: 'application' | 'browser' | 'monitor' | 'window'
+
+      }
+
+    }
+    navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
+      console.log("Got stream: ", stream)
+      screenStreamRef.current.srcObject = stream
+      setScreenStream(stream)
+    }).catch(error => {
+      console.error('Error accessing media devices.', error);
+    });
+  }
   return (
     <div>
 
@@ -191,7 +208,7 @@ export default function Chat() {
         </Grid>
       </Grid>
       <Grid container component={Paper} className={classes.chatSection}>
-        <Grid item xs={3} className={classes.borderRight500}>
+        <Grid item xs={2} className={classes.borderRight500}>
           <List>
             {users.map((user, index) =>
               <ListItem key={index} onClick={handleReceiverSelection(user)}>
@@ -203,7 +220,9 @@ export default function Chat() {
               </ListItem>
             )}
           </List>
-          <video width="100%" height="250"  controls></video>
+          <video width="100%" height="250" autoPlay playsInline controls="false" ref={screenStreamRef}
+
+          ></video>
 
           {/* <Divider />
                 <Grid item xs={12} style={{padding: '10px'}}>
@@ -214,7 +233,7 @@ export default function Chat() {
         </Grid>
         {/* <video>working</video> */}
 
-        <Grid item xs={9}>
+        <Grid item xs={10}>
           <List className={classes.messageArea}>
             {messages.map((message, index) => {
               return <ListItem key={index}>
@@ -232,12 +251,12 @@ export default function Chat() {
           </List>
           <Divider />
           <Grid container style={{ padding: '20px' }}>
-            <Grid item xs={11}>
+            <Grid item xs={10}>
               <TextField id="outlined-basic-email" label="Type Something" fullWidth
                 value={textMessage} onChange={handleTextMessage}
               />
             </Grid>
-            <Grid xs={1} align="right">
+            <Grid xs={2} align="left">
               <Fab color="primary"
               >
                 <label htmlFor='uploadButton'>
@@ -246,6 +265,7 @@ export default function Chat() {
                   <AttachFileIcon onClick={handleFileUpload} /></label>
               </Fab>
 
+              <Fab color="primary" aria-label="add" onClick={handleScreenShare}><ScreenShareIcon /></Fab>
 
               <Fab color="primary" aria-label="add" onClick={handleSendMessage}><SendIcon /></Fab>
 
