@@ -35,6 +35,24 @@ const messageHandlers = (io, socket) => {
         console.log(file)
     }
 
+    const handleSendVideoOffer = (sender, receiver, sdp) => {
+        io.to(receiver).emit('receiveVideoOffer', sender, receiver, sdp)
+
+    }
+
+    const handleSendVideoAnswer = (sender, receiver, sdp) => {
+        console.log("wow")
+
+    }
+
+    const handleNewIceCandidate = (receiver, candidate) => {
+        io.to(receiver).emit("receiveNewIceCandidate", candidate)
+    }
+
+    const handleSendHangUp = (sender, receiver) => {
+        io.to(receiver).emit('receiveHangUp')
+    }
+
     socket.on('joinRoom', joinRoom)
     socket.on('sendMessage', sendMessage)
     socket.on('disconnect', () => {
@@ -43,6 +61,11 @@ const messageHandlers = (io, socket) => {
 
     socket.on('getMessages', getMessages)
     socket.on('fileUpload', handleFileUpload)
+    socket.on('sendVideoOffer', handleSendVideoOffer)
+    socket.on('sendVideoAnswer', handleSendVideoAnswer)
+    socket.on('sendNewIceCandidate', handleNewIceCandidate)
+    socket.on('sendHangUp', handleSendHangUp)
+
 }
 
 export default messageHandlers

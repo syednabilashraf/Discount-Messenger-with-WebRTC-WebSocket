@@ -24,7 +24,8 @@ import AttachFileIcon from '@material-ui/icons/AttachFile';
 import CallIcon from '@material-ui/icons/Call';
 import VideoCallIcon from '@material-ui/icons/VideoCall';
 import ScreenShareIcon from '@material-ui/icons/ScreenShare';
-
+import StopScreenShareIcon from '@material-ui/icons/StopScreenShare';
+import auth from '../auth/auth-helper'
 // const useStyles = makeStyles(theme => ({
 //   card: {
 //     maxWidth: 600,
@@ -69,15 +70,18 @@ const useStyles = makeStyles({
     overflowY: 'auto'
   }
 });
-const { user } = JSON.parse(sessionStorage.getItem('jwt'))
-const socket = io('http://localhost:3000/', {
-  auth: {
-    user
-  }
-});
-let myPeerConnection;
+
+// const user = {
+//   "_id": "61c810a14c1d8410ccfe2fc0",
+//   "name": "ashraf",
+//   "email": "ashraf@gmail.com"
+// }
+
+
 
 export default function Chat() {
+  console.log("starting")
+  let myPeerConnection;
 
   const [textMessage, setTextMessage] = useState('')
   const [socketInstance, setSocketInstance] = useState()
@@ -88,7 +92,18 @@ export default function Chat() {
 
 
 
+  const jwt = auth.isAuthenticated()
+  const user = jwt?.user
+
+  const socket = io('http://localhost:3000/', {
+    auth: {
+      user
+    }
+  });
+
+
   useEffect(() => {
+    // const jwt = auth.isAuthenticated()
     list().then(data => {
       console.log(data)
       setUsers(data)
@@ -107,6 +122,108 @@ export default function Chat() {
       socket.disconnect()
     }
   }, [])
+
+  const handleVideoOfferMsg = (senderId, receiverId, sdp) => {
+    var localStream = null;
+
+    let targetId = senderId;
+    createPeerConnection();
+
+    var desc = new RTCSessionDescription(sdp);
+
+    myPeerConnection?.setRemoteDescription(desc).then(function () {
+      return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    })
+      .then(function (stream) {
+        localStream = stream;
+        localScreenStreamRef.current.srcObject = localStream
+        localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
+
+      })
+      .then(function () {
+        return myPeerConnection?.createAnswer();
+      })
+      .then(function (answer) {
+        return myPeerConnection?.setLocalDescription(answer);
+      })
+      .then(function () {
+        // var msg = {
+        //   name: myUsername,
+        //   target: targetUsername,
+        //   type: "video-answer",
+        //   sdp: myPeerConnection?.localDescription
+        // };
+
+        // sendToServer(msg);
+        socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
+
+      })
+      .catch(handleGetUserMediaError);
+  }
+
+  const handleReceiveNewIceCandidate = (candidate) => {
+    var iceCandidate = new RTCIceCandidate(candidate)
+    myPeerConnection?.addIceCandidate(iceCandidate).catch(reportError)
+  }
+
+  function closeVideoCall() {
+    // var localVideo = document.getElementById("local_video");
+
+    console.log("Closing the call");
+
+    // Close the RTCPeerConnection
+
+    if (myPeerConnection) {
+      console.log("--> Closing the peer connection");
+
+      // Disconnect all our event listeners; we don't want stray events
+      // to interfere with the hangup while it's ongoing.
+
+      myPeerConnection.ontrack = null;
+      myPeerConnection.onnicecandidate = null;
+      myPeerConnection.oniceconnectionstatechange = null;
+      myPeerConnection.onsignalingstatechange = null;
+      myPeerConnection.onicegatheringstatechange = null;
+      myPeerConnection.onnotificationneeded = null;
+
+      // Stop all transceivers on the connection
+
+      myPeerConnection.getTransceivers().forEach(transceiver => {
+        transceiver.stop();
+      });
+
+      // Stop the webcam preview as well by pausing the <video>
+      // element, then stopping each of the getUserMedia() tracks
+      // on it.
+
+      if (remoteScreenStreamRef.current.srcObject) {
+        
+        remoteScreenStreamRef.current.srcObject.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      if (localScreenStreamRef.current.srcObject) {
+        
+        localScreenStreamRef.current.srcObject.getTracks().forEach(track => {
+          track.stop();
+        });
+      }
+
+      // Close the peer connection
+
+      myPeerConnection.close();
+      myPeerConnection = null;
+      // webcamStream = null;
+    }
+
+    // Disable the hangup button
+
+    // document.getElementById("hangup-button").disabled = true;
+    // targetUsername = null;
+  }
+
+
   if (socket) {
     socket.on('connect', () => {
       console.log('connected')
@@ -117,6 +234,12 @@ export default function Chat() {
       setMessages(messages.concat(message))
       console.log(messages)
     })
+
+    socket.on('receiveVideoOffer', handleVideoOfferMsg)
+
+    socket.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
+
+    socket.on('receiveHangUp', () => {closeVideoCall()})
   }
 
   const handleSendMessage = () => {
@@ -190,61 +313,10 @@ export default function Chat() {
     socket.emit('fileUpload', file)
   }
 
-  const handleNegotiationNeededEvent = () => {
-    myPeerConnection?.createOffer().then(function (offer) {
-      return myPeerConnection?.setLocalDescription(offer);
-    })
-      .then(function () {
-        socket.emit("videoOffer", sender, receiver, myPeerConnection.localDescription)
-        // sendToServer({
-        //   name: sender,
-        //   target: receiver,
-        // type: "video-offer",
-        //   sdp: myPeerConnection.localDescription
-        // });
-      })
-      .catch((err) => {
-        console.log(err)
-      });
-  }
+ 
+ 
 
-  const handleVideoOfferMsg = (msg) => {
-    var localStream = null;
-
-    let targetUsername = msg.name;
-    createPeerConnection();
-
-    var desc = new RTCSessionDescription(msg.sdp);
-
-    myPeerConnection?.setRemoteDescription(desc).then(function () {
-      return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-    })
-      .then(function (stream) {
-        localStream = stream;
-        localScreenStreamRef.current.srcObject = localStream
-        localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
-
-      })
-      .then(function () {
-        return myPeerConnection?.createAnswer();
-      })
-      .then(function (answer) {
-        return myPeerConnection?.setLocalDescription(answer);
-      })
-      .then(function () {
-        // var msg = {
-        //   name: myUsername,
-        //   target: targetUsername,
-        //   type: "video-answer",
-        //   sdp: myPeerConnection?.localDescription
-        // };
-
-        // sendToServer(msg);
-        socket.emit("sendVideoAnswer", sender, receiver, myPeerConnection?.localDescription)
-
-      })
-      .catch(handleGetUserMediaError);
-  }
+  
 
   const createPeerConnection = () => {
     myPeerConnection = new RTCPeerConnection({
@@ -255,13 +327,13 @@ export default function Chat() {
       ]
     });
 
-    // myPeerConnection.onicecandidate = handleICECandidateEvent;
-    // myPeerConnection.ontrack = handleTrackEvent;
+    myPeerConnection.onicecandidate = handleICECandidateEvent;
+    myPeerConnection.ontrack = handleTrackEvent;
     myPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
-    // myPeerConnection.onremovetrack = handleRemoveTrackEvent;
-    // myPeerConnection.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
-    // myPeerConnection.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
-    // myPeerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
+    myPeerConnection.onremovetrack = handleRemoveTrackEvent;
+    myPeerConnection.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
+    myPeerConnection.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
+    myPeerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
   }
 
   const handleScreenShare = (e) => {
@@ -275,19 +347,115 @@ export default function Chat() {
       //
       createPeerConnection()
       console.log("Screen sharing")
-      
 
-      }
-      navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
-        console.log("Got stream: ", stream)
-        localScreenStreamRef.current.srcObject = stream
-        stream.getTracks().forEach(track => myPeerConnection.addTrack(track, stream))
-      }).catch(error => {
-        console.error('Error accessing media devices.', error);
-      });
+
+    }
+    navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
+      console.log("Got stream: ", stream)
+      localScreenStreamRef.current.srcObject = stream
+      stream.getTracks().forEach(track => myPeerConnection.addTrack(track, stream))
+    }).catch(handleGetUserMediaError);
+  }
+
+  function handleGetUserMediaError(e) {
+    switch (e.name) {
+      case "NotFoundError":
+        alert("Unable to open your call because no camera and/or microphone" +
+          "were found.");
+        break;
+      case "SecurityError":
+      case "PermissionDeniedError":
+        // Do nothing; this is the same as the user cancelling the call.
+        break;
+      default:
+        alert("Error opening your camera and/or microphone: " + e.message);
+        break;
     }
 
+    closeVideoCall();
   }
+
+  const handleNegotiationNeededEvent = () => {
+    myPeerConnection?.createOffer().then(function (offer) {
+      return myPeerConnection?.setLocalDescription(offer);
+    })
+      .then(function () {
+        socket.emit("sendVideoOffer", sender, receiver, myPeerConnection.localDescription)
+        // sendToServer({
+        //   name: sender,
+        //   target: receiver,
+        // type: "video-offer",
+        //   sdp: myPeerConnection.localDescription
+        // });
+      })
+      .catch(reportError);
+  }
+
+  function reportError(errMessage) {
+    console.log(`Error ${errMessage.name}: ${errMessage.message}`);
+  }
+
+  function handleICECandidateEvent(event) {
+    if (event.candidate) {
+      // console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
+      console.log("*** Outgoing ICE candidate: ");
+
+      socket.emit("sendNewIceCandidate", receiver, event.candidate)
+      // sendToServer({
+      //   type: "new-ice-candidate",
+      //   target: targetUsername,
+      //   candidate: event.candidate
+      // });
+    }
+  }
+
+  function handleTrackEvent(event) {
+    console.log("*** Track event");
+
+    // document.getElementById("received_video").srcObject = event.streams[0];
+    remoteScreenStreamRef.current.srcObject = event.streams[0]
+    // document.getElementById("hangup-button").disabled = false;
+  }
+
+  function handleICEConnectionStateChangeEvent(event) {
+    console.log("*** ICE connection state changed to " + myPeerConnection?.iceConnectionState);
+
+    switch (myPeerConnection?.iceConnectionState) {
+      case "closed":
+      case "failed":
+      case "disconnected":
+        closeVideoCall();
+        break;
+    }
+  }
+  function handleRemoveTrackEvent(event) {
+    var stream = remoteScreenStreamRef.current.srcObject;
+    var trackList = stream.getTracks();
+
+    if (trackList.length == 0) {
+      closeVideoCall();
+    }
+  }
+
+
+  function handleICEGatheringStateChangeEvent(event) {
+    console.log("*** ICE gathering state changed to: " + myPeerConnection?.iceGatheringState);
+  }
+
+  function handleSignalingStateChangeEvent(event) {
+    console.log("*** WebRTC signaling state changed to: " + myPeerConnection?.signalingState);
+    switch (myPeerConnection?.signalingState) {
+      case "closed":
+        closeVideoCall();
+        break;
+    }
+  }
+
+  const handleStopScreenShare = () => {
+    closeVideoCall()
+    socket.emit('sendHangUp',sender,receiver)
+  }
+
   return (
     <div>
 
@@ -312,9 +480,9 @@ export default function Chat() {
           <video width="100%" height="250" autoPlay playsInline controls="false" ref={localScreenStreamRef}
 
           ></video>
-           <video width="100%" height="250" autoPlay playsInline controls="false" ref={remoteScreenStreamRef}
+          <video width="100%" height="250" autoPlay playsInline controls="false" ref={remoteScreenStreamRef}
 
-></video>
+          ></video>
 
           {/* <Divider />
                 <Grid item xs={12} style={{padding: '10px'}}>
@@ -358,6 +526,8 @@ export default function Chat() {
               </Fab>
 
               <Fab color="primary" aria-label="add" onClick={handleScreenShare}><ScreenShareIcon /></Fab>
+              <Fab color="primary" aria-label="add" onClick={handleStopScreenShare}><StopScreenShareIcon /></Fab>
+
 
               <Fab color="primary" aria-label="add" onClick={handleSendMessage}><SendIcon /></Fab>
 
