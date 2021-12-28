@@ -78,13 +78,13 @@ const useStyles = makeStyles({
 // }
 
 
-
 export default function Chat() {
+  let socketInstance = null;
   console.log("starting")
   let myPeerConnection;
 
   const [textMessage, setTextMessage] = useState('')
-  const [socketInstance, setSocketInstance] = useState()
+  const [socket, setSocket] = useState()
   const [messages, setMessages] = useState([])
   const [screenStream, setScreenStream] = useState("")
   const localScreenStreamRef = useRef()
@@ -92,17 +92,19 @@ export default function Chat() {
 
 
 
-  const jwt = auth.isAuthenticated()
-  const user = jwt?.user
 
-  const socket = io('http://localhost:3000/', {
-    auth: {
-      user
-    }
-  });
+
 
 
   useEffect(() => {
+    const jwt = auth.isAuthenticated()
+    const user = jwt?.user
+    socketInstance = io('http://localhost:3000/', {
+      auth: {
+        user
+      }
+    });
+    setSocket(socketInstance)
     // const jwt = auth.isAuthenticated()
     list().then(data => {
       console.log(data)
@@ -124,44 +126,116 @@ export default function Chat() {
   }, [])
 
   const handleVideoOfferMsg = (senderId, receiverId, sdp) => {
-    var localStream = null;
+    console.log("received video offer")
+    // var localStream = null;
 
     let targetId = senderId;
-    createPeerConnection();
+    if (!myPeerConnection) {
+      createPeerConnection();
+    }
+
 
     var desc = new RTCSessionDescription(sdp);
+    console.log("RTCSessionDescription desc", desc)
+    var localStream;
 
-    myPeerConnection?.setRemoteDescription(desc).then(function () {
-      return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-    })
-      .then(function (stream) {
-        localStream = stream;
-        localScreenStreamRef.current.srcObject = localStream
-        localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
+    /*
+    .then(function () {
+          return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+        })
+          .then(function (stream) {
+            localStream = stream;
+            localScreenStreamRef.current.srcObject = localStream
+            localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
+            console.log("all tracks added")
+    
+          })
+    */
+    // navigator.mediaDevices.getDisplayMedia(mediaConstraints).
+    //   then(function (stream) {
 
-      })
-      .then(function () {
-        return myPeerConnection?.createAnswer();
-      })
-      .then(function (answer) {
-        return myPeerConnection?.setLocalDescription(answer);
-      })
-      .then(function () {
-        // var msg = {
-        //   name: myUsername,
-        //   target: targetUsername,
-        //   type: "video-answer",
-        //   sdp: myPeerConnection?.localDescription
-        // };
+    //     console.log("receiver's stream", stream)
+    //     localScreenStreamRef.current.srcObject = stream
+    //     stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream));
+    //     console.log("all tracks added")
 
-        // sendToServer(msg);
-        socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
+    //   }).
+    if (myPeerConnection?.signalingState != "stable") {
+      console.log("making stable")
+      myPeerConnection.setLocalDescription({ type: "rollback" }).then(function () {
+        return myPeerConnection.setRemoteDescription(desc)
+      }).catch(handleGetUserMediaError)
+    }
+    else {
+      myPeerConnection?.setRemoteDescription(desc)
+        .then(function () {
+          return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+        })
+        .then(function (stream) {
+          console.log("receivers stream", stream)
+          localStream = stream;
+          localScreenStreamRef.current.srcObject = localStream
+          localStream.getTracks().forEach(track => {
+            myPeerConnection?.addTrack(track, localStream)
+            console.log("receivers track", track)
+          });
+          console.log("all tracks added")
 
-      })
-      .catch(handleGetUserMediaError);
+        }).then(function () {
+          console.log("remoteDesc added")
+          return myPeerConnection?.createAnswer();
+        }).then(function (answer) {
+          return myPeerConnection?.setLocalDescription(answer)
+        }).then(function () {
+          // var msg = {
+          //   name: myUsername,
+          //   target: targetUsername,
+          //   type: "video-answer",
+          //   sdp: myPeerConnection?.localDescription
+          // };
+
+          // sendToServer(msg);
+          socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
+
+        }).catch(handleGetUserMediaError);
+    }
+
+
+    // myPeerConnection?.setRemoteDescription(desc)
+    //   .then(function () {
+    //     return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    //   })
+    //   .then(function (stream) {
+
+    //     console.log("receiver's stream", stream)
+    //     localScreenStreamRef.current.srcObject = stream
+    //     stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream));
+    //     console.log("all tracks added")
+
+    //   })
+    //   .then(function () {
+    //     return myPeerConnection?.createAnswer();
+    //   })
+    //   .then(function (answer) {
+    //     return myPeerConnection?.setLocalDescription(answer);
+    //   })
+    //   .then(function () {
+    //     // var msg = {
+    //     //   name: myUsername,
+    //     //   target: targetUsername,
+    //     //   type: "video-answer",
+    //     //   sdp: myPeerConnection?.localDescription
+    //     // };
+
+    //     // sendToServer(msg);
+    //     socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
+
+    //   })
+    //   .catch(handleGetUserMediaError);
   }
 
   const handleReceiveNewIceCandidate = (candidate) => {
+    console.log("adding IceCandidate", candidate)
     var iceCandidate = new RTCIceCandidate(candidate)
     myPeerConnection?.addIceCandidate(iceCandidate).catch(reportError)
   }
@@ -197,14 +271,14 @@ export default function Chat() {
       // on it.
 
       if (remoteScreenStreamRef.current.srcObject) {
-        
+
         remoteScreenStreamRef.current.srcObject.getTracks().forEach(track => {
           track.stop();
         });
       }
 
       if (localScreenStreamRef.current.srcObject) {
-        
+
         localScreenStreamRef.current.srcObject.getTracks().forEach(track => {
           track.stop();
         });
@@ -223,6 +297,16 @@ export default function Chat() {
     // targetUsername = null;
   }
 
+  const handleReceiveVideoAnswer = (sender, receiver, sdp) => {
+    console.log("*** Call recipient has accepted our call");
+
+    // Configure the remote description, which is the SDP payload
+    // in our "video-answer" message.
+
+    var desc = new RTCSessionDescription(sdp);
+    myPeerConnection?.setRemoteDescription(desc).catch(reportError);
+  }
+
 
   if (socket) {
     socket.on('connect', () => {
@@ -239,7 +323,9 @@ export default function Chat() {
 
     socket.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
 
-    socket.on('receiveHangUp', () => {closeVideoCall()})
+    socket.on('receiveHangUp', () => { closeVideoCall() })
+
+    socket.on('receiveVideoAnswer', handleReceiveVideoAnswer)
   }
 
   const handleSendMessage = () => {
@@ -313,18 +399,27 @@ export default function Chat() {
     socket.emit('fileUpload', file)
   }
 
- 
- 
 
-  
+
+
+
 
   const createPeerConnection = () => {
+
     myPeerConnection = new RTCPeerConnection({
       iceServers: [
+        // {
+        //   urls: "stun:stun.stunprotocol.org"
+        // }
         {
-          urls: "stun:stun.stunprotocol.org"
-        }
+          "urls": [
+          "turn:13.250.13.83:3478?transport=udp"
+          ],
+          "username": "YzYNCouZM1mhqhmseWk6",
+          "credential": "YzYNCouZM1mhqhmseWk6"
+          }
       ]
+      // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
     });
 
     myPeerConnection.onicecandidate = handleICECandidateEvent;
@@ -350,14 +445,25 @@ export default function Chat() {
 
 
     }
+    var localStream;
     navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
-      console.log("Got stream: ", stream)
-      localScreenStreamRef.current.srcObject = stream
-      stream.getTracks().forEach(track => myPeerConnection.addTrack(track, stream))
+      localStream = stream;
+      localScreenStreamRef.current.srcObject = localStream
+
+      console.log("sender's stream", localStream)
+      // stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream))
+      localStream.getTracks().forEach(track => {
+        myPeerConnection?.addTrack(track, localStream)
+        console.log("sender's track", track)
+
+      });
+      console.log("all tracks added")
+
     }).catch(handleGetUserMediaError);
   }
 
   function handleGetUserMediaError(e) {
+    console.log(e)
     switch (e.name) {
       case "NotFoundError":
         alert("Unable to open your call because no camera and/or microphone" +
@@ -376,17 +482,23 @@ export default function Chat() {
   }
 
   const handleNegotiationNeededEvent = () => {
+    console.log("starting negotiation")
+
     myPeerConnection?.createOffer().then(function (offer) {
+      if(myPeerConnection.signalingState != "stable"){
+        console.log("connection unstable, should return")
+      }
       return myPeerConnection?.setLocalDescription(offer);
     })
       .then(function () {
-        socket.emit("sendVideoOffer", sender, receiver, myPeerConnection.localDescription)
+        socket.emit("sendVideoOffer", sender, receiver, myPeerConnection?.localDescription)
         // sendToServer({
         //   name: sender,
         //   target: receiver,
         // type: "video-offer",
         //   sdp: myPeerConnection.localDescription
         // });
+        console.log("offer sent")
       })
       .catch(reportError);
   }
@@ -396,6 +508,8 @@ export default function Chat() {
   }
 
   function handleICECandidateEvent(event) {
+    console.log("handleICECandidateEvent")
+
     if (event.candidate) {
       // console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
       console.log("*** Outgoing ICE candidate: ");
@@ -410,10 +524,13 @@ export default function Chat() {
   }
 
   function handleTrackEvent(event) {
-    console.log("*** Track event");
+    console.log("*** Track event", event);
 
     // document.getElementById("received_video").srcObject = event.streams[0];
     remoteScreenStreamRef.current.srcObject = event.streams[0]
+    // localScreenStreamRef.current.srcObject = event.streams[0]
+
+
     // document.getElementById("hangup-button").disabled = false;
   }
 
@@ -453,7 +570,7 @@ export default function Chat() {
 
   const handleStopScreenShare = () => {
     closeVideoCall()
-    socket.emit('sendHangUp',sender,receiver)
+    socket.emit('sendHangUp', sender, receiver)
   }
 
   return (
@@ -477,10 +594,13 @@ export default function Chat() {
               </ListItem>
             )}
           </List>
-          <video width="100%" height="250" autoPlay playsInline controls="false" ref={localScreenStreamRef}
+          <Typography>Local screen</Typography>
+          <video width="100%" height="250" autoPlay playsInline ref={localScreenStreamRef}
 
           ></video>
-          <video width="100%" height="250" autoPlay playsInline controls="false" ref={remoteScreenStreamRef}
+          <Typography>Remote screen</Typography>
+
+          <video width="100%" height="250" autoPlay playsInline ref={remoteScreenStreamRef}
 
           ></video>
 

@@ -36,3 +36,30 @@ httpServer.listen(config.port, (err) => {
 
 //  {room : socketId}
 //  
+
+/*
+client creates stream 
+all stream tracks are added to peerConnection
+--negotiationneeded event triggered
+sdp offer is created and set as localDescription
+--onsignalingstatechange triggered (becomes "have-local-offer")
+sdp offer is sent to receiver through signalling server
+onicegatheringstatechange,oniceCandidate events triggered
+
+receiver receives client sdp in video offer
+sets client sdp as RTCSessionDescription which is set as remoteDescription
+--onsignalingstatechange triggered (becomes "have-remote-offer")
+--ontrack event triggered
+--receiver also starts receiving ice candidates sent by client until client stops sending
+when receiver shares a screen, sdp answer is created and set as localDescription
+the sdp answer is then sent to client
+
+client receives receiver's sdp in video answer
+sets receivers sdp as remoteDescription
+--onsignalingstatechange triggered (becomes "state")
+--ontrack event triggered and receivers media is added to client
+--oniceconnectionstatechange triggered which changes to "checking" and then to "connected"
+
+
+
+*/

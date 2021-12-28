@@ -36,20 +36,27 @@ const messageHandlers = (io, socket) => {
     }
 
     const handleSendVideoOffer = (sender, receiver, sdp) => {
+        console.log(`sending video offer from${sender} to ${receiver}`)
+        console.log(sdp)
         io.to(receiver).emit('receiveVideoOffer', sender, receiver, sdp)
 
     }
 
     const handleSendVideoAnswer = (sender, receiver, sdp) => {
-        console.log("wow")
+        console.log(`sending video answer from${sender} to ${receiver}`)
+        console.log(sdp)
+        io.to(receiver).emit('receiveVideoAnswer',sender, receiver,sdp)
 
     }
 
     const handleNewIceCandidate = (receiver, candidate) => {
+        console.log(`sending ice candidate to ${receiver}`)
         io.to(receiver).emit("receiveNewIceCandidate", candidate)
+        console.log(`icecandidate sent to ${receiver}`, candidate)
     }
 
     const handleSendHangUp = (sender, receiver) => {
+        console.log("hanging up")
         io.to(receiver).emit('receiveHangUp')
     }
 
@@ -69,6 +76,50 @@ const messageHandlers = (io, socket) => {
 }
 
 export default messageHandlers
+
+/*
+---caller side---
+
+create rtc peerConnection with iceServers and add all event handlers (createPeerconnection)
+sender gets displayMedia/userMedia and creates stream
+stream is added to local video's srcObject with a ref
+all tracks in stream are added to peerConnection
+
+After adding all tracks, negotiationNeeded event is triggered on peerConnection
+--handle negotiation:
+create offer
+setLocalDescription as offer
+send {sender, receiver, localDescription} to signalling server with "send-video-offer" event
+server sends {sender, receiver, localDescription} to receiver in "receive-video-offer" event
+
+
+---receiver side---
+
+Receiver listens to "receive-video-offer" event which has {sender, receiver, localDescription}
+create peerConnection
+create RTCSessionDescription object with the caller's sdp
+set the object as remoteDescription for peerConnection
+receiver gets displayMedia/userMedia and creates stream
+stream is added to local video's srcObject with a ref
+all tracks in stream are added to peerConnection
+peerConnection creates answer
+the answer is set as localDescription of peerConnection
+send {localDescription,targetId} to signalling server
+signalling server sends sdp of receiver to caller in 'receive-video-answer' event
+
+---caller side---
+caller receives {localDescription,targetId}
+caller creates RTCSessionDescription object with receivers sdp
+set object as remoteDescription for peerConnection
+
+
+
+
+
+
+
+
+*/
 
 
 
