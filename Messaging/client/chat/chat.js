@@ -413,11 +413,11 @@ export default function Chat() {
         // }
         {
           "urls": [
-          "turn:13.250.13.83:3478?transport=udp"
+            "turn:13.250.13.83:3478?transport=udp"
           ],
           "username": "YzYNCouZM1mhqhmseWk6",
           "credential": "YzYNCouZM1mhqhmseWk6"
-          }
+        }
       ]
       // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
     });
@@ -485,7 +485,7 @@ export default function Chat() {
     console.log("starting negotiation")
 
     myPeerConnection?.createOffer().then(function (offer) {
-      if(myPeerConnection.signalingState != "stable"){
+      if (myPeerConnection.signalingState != "stable") {
         console.log("connection unstable, should return")
       }
       return myPeerConnection?.setLocalDescription(offer);
