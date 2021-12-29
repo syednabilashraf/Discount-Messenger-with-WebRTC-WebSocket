@@ -37,22 +37,18 @@ const messageHandlers = (io, socket) => {
 
     const handleSendVideoOffer = (sender, receiver, sdp) => {
         console.log(`sending video offer from${sender} to ${receiver}`)
-        console.log(sdp)
-        io.to(receiver).emit('receiveVideoOffer', sender, receiver, sdp)
+        io.in(receiver).emit('receiveVideoOffer', sender, receiver, sdp)
 
     }
 
     const handleSendVideoAnswer = (sender, receiver, sdp) => {
         console.log(`sending video answer from${sender} to ${receiver}`)
-        console.log(sdp)
         io.to(receiver).emit('receiveVideoAnswer',sender, receiver,sdp)
 
     }
 
     const handleNewIceCandidate = (receiver, candidate) => {
-        console.log(`sending ice candidate to ${receiver}`)
-        io.to(receiver).emit("receiveNewIceCandidate", candidate)
-        console.log(`icecandidate sent to ${receiver}`, candidate)
+        io.in(receiver).emit("receiveNewIceCandidate", candidate)
     }
 
     const handleSendHangUp = (sender, receiver) => {

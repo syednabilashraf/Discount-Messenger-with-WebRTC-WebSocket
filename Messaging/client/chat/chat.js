@@ -81,7 +81,6 @@ const useStyles = makeStyles({
 export default function Chat() {
   let socketInstance = null;
   console.log("starting")
-  let myPeerConnection;
 
   const [textMessage, setTextMessage] = useState('')
   const [socket, setSocket] = useState()
@@ -89,6 +88,23 @@ export default function Chat() {
   const [screenStream, setScreenStream] = useState("")
   const localScreenStreamRef = useRef()
   const remoteScreenStreamRef = useRef()
+  const stunServers = {
+    iceServers: [
+      // {
+      //   urls: "stun:stun.stunprotocol.org"
+      // }
+      {
+        "urls": [
+          "turn:13.250.13.83:3478?transport=udp"
+        ],
+        "username": "YzYNCouZM1mhqhmseWk6",
+        "credential": "YzYNCouZM1mhqhmseWk6"
+      }
+    ]
+    // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
+  }
+  const  myPeerConnection = new RTCPeerConnection(stunServers)
+
 
 
 
@@ -97,6 +113,7 @@ export default function Chat() {
 
 
   useEffect(() => {
+    console.log('here')
     const jwt = auth.isAuthenticated()
     const user = jwt?.user
     socketInstance = io('http://localhost:3000/', {
@@ -125,119 +142,32 @@ export default function Chat() {
     }
   }, [])
 
-  const handleVideoOfferMsg = (senderId, receiverId, sdp) => {
+  const handleVideoOfferMsg = async (senderId, receiverId, sdp) => {
     console.log("received video offer")
-    // var localStream = null;
-
-    let targetId = senderId;
-    if (!myPeerConnection) {
-      createPeerConnection();
-    }
-
-
-    var desc = new RTCSessionDescription(sdp);
-    console.log("RTCSessionDescription desc", desc)
-    var localStream;
-
-    /*
-    .then(function () {
-          return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-        })
-          .then(function (stream) {
-            localStream = stream;
-            localScreenStreamRef.current.srcObject = localStream
-            localStream.getTracks().forEach(track => myPeerConnection?.addTrack(track, localStream));
-            console.log("all tracks added")
-    
-          })
-    */
-    // navigator.mediaDevices.getDisplayMedia(mediaConstraints).
-    //   then(function (stream) {
-
-    //     console.log("receiver's stream", stream)
-    //     localScreenStreamRef.current.srcObject = stream
-    //     stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream));
-    //     console.log("all tracks added")
-
-    //   }).
-    if (myPeerConnection?.signalingState != "stable") {
-      console.log("making stable")
-      myPeerConnection.setLocalDescription({ type: "rollback" }).then(function () {
-        return myPeerConnection.setRemoteDescription(desc)
-      }).catch(handleGetUserMediaError)
-    }
-    else {
-      myPeerConnection?.setRemoteDescription(desc)
-        .then(function () {
-          return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-        })
-        .then(function (stream) {
-          console.log("receivers stream", stream)
-          localStream = stream;
-          localScreenStreamRef.current.srcObject = localStream
-          localStream.getTracks().forEach(track => {
-            myPeerConnection?.addTrack(track, localStream)
-            console.log("receivers track", track)
-          });
-          console.log("all tracks added")
-
-        }).then(function () {
-          console.log("remoteDesc added")
-          return myPeerConnection?.createAnswer();
-        }).then(function (answer) {
-          return myPeerConnection?.setLocalDescription(answer)
-        }).then(function () {
-          // var msg = {
-          //   name: myUsername,
-          //   target: targetUsername,
-          //   type: "video-answer",
-          //   sdp: myPeerConnection?.localDescription
-          // };
-
-          // sendToServer(msg);
-          socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
-
-        }).catch(handleGetUserMediaError);
-    }
-
-
-    // myPeerConnection?.setRemoteDescription(desc)
-    //   .then(function () {
-    //     return navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-    //   })
-    //   .then(function (stream) {
-
-    //     console.log("receiver's stream", stream)
-    //     localScreenStreamRef.current.srcObject = stream
-    //     stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream));
-    //     console.log("all tracks added")
-
-    //   })
-    //   .then(function () {
-    //     return myPeerConnection?.createAnswer();
-    //   })
-    //   .then(function (answer) {
-    //     return myPeerConnection?.setLocalDescription(answer);
-    //   })
-    //   .then(function () {
-    //     // var msg = {
-    //     //   name: myUsername,
-    //     //   target: targetUsername,
-    //     //   type: "video-answer",
-    //     //   sdp: myPeerConnection?.localDescription
-    //     // };
-
-    //     // sendToServer(msg);
-    //     socket.emit("sendVideoAnswer", sender, targetId, myPeerConnection?.localDescription)
-
-    //   })
-    //   .catch(handleGetUserMediaError);
+    createPeerConnection()
+    await myPeerConnection.setRemoteDescription(sdp);
+    console.log("remote desc set", sdp)
+    // const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    // stream.getTracks().forEach(track => {
+    //   myPeerConnection.addTrack(track, stream)
+    // })
+    const answer = await myPeerConnection.createAnswer();
+    console.log("answer created")
+    await myPeerConnection.setLocalDescription(answer);
+    socket.emit("sendVideoAnswer", receiverId, senderId, myPeerConnection.localDescription)
+    console.log("sdp sent to caller")
   }
 
-  const handleReceiveNewIceCandidate = (candidate) => {
-    console.log("adding IceCandidate", candidate)
-    var iceCandidate = new RTCIceCandidate(candidate)
-    myPeerConnection?.addIceCandidate(iceCandidate).catch(reportError)
+  const handleReceiveNewIceCandidate = async (candidate) => {
+    // var iceCandidate = new RTCIceCandidate(candidate)
+    try {
+      await myPeerConnection.addIceCandidate(candidate)
+      console.log("adding IceCandidate", candidate)
+
+    }
+    catch (err) {
+      reportError(err)
+    }
   }
 
   function closeVideoCall() {
@@ -297,16 +227,24 @@ export default function Chat() {
     // targetUsername = null;
   }
 
-  const handleReceiveVideoAnswer = (sender, receiver, sdp) => {
+  const handleReceiveVideoAnswer = async (sender, receiver, sdp) => {
     console.log("*** Call recipient has accepted our call");
 
     // Configure the remote description, which is the SDP payload
     // in our "video-answer" message.
 
-    var desc = new RTCSessionDescription(sdp);
-    myPeerConnection?.setRemoteDescription(desc).catch(reportError);
+    // var desc = new RTCSessionDescription(sdp);
+    try {
+      if (myPeerConnection.localDescription) {
+        console.log("myPeerConnection", myPeerConnection)
+        await myPeerConnection.setRemoteDescription(sdp)
+        console.log("remote desc added", myPeerConnection)
+      }
+    }
+    catch (err) {
+      reportError(err)
+    }
   }
-
 
   if (socket) {
     socket.on('connect', () => {
@@ -401,39 +339,21 @@ export default function Chat() {
 
 
 
-
-
-
   const createPeerConnection = () => {
 
-    myPeerConnection = new RTCPeerConnection({
-      iceServers: [
-        // {
-        //   urls: "stun:stun.stunprotocol.org"
-        // }
-        {
-          "urls": [
-            "turn:13.250.13.83:3478?transport=udp"
-          ],
-          "username": "YzYNCouZM1mhqhmseWk6",
-          "credential": "YzYNCouZM1mhqhmseWk6"
-        }
-      ]
-      // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
-    });
 
     myPeerConnection.onicecandidate = handleICECandidateEvent;
     myPeerConnection.ontrack = handleTrackEvent;
     myPeerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
-    myPeerConnection.onremovetrack = handleRemoveTrackEvent;
+    // myPeerConnection.onremovetrack = handleRemoveTrackEvent;
     myPeerConnection.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
     myPeerConnection.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
     myPeerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
+
   }
+  const handleScreenShare = async (e) => {
 
-  const handleScreenShare = (e) => {
-
-    if (myPeerConnection) {
+    if (myPeerConnection.localDescription) {
       console.log("You are already connected")
     }
     else {
@@ -442,24 +362,20 @@ export default function Chat() {
       //
       createPeerConnection()
       console.log("Screen sharing")
-
-
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
+        localScreenStreamRef.current.srcObject = stream;
+        stream.getTracks().forEach((track) => {
+          myPeerConnection.addTrack(track, stream);
+        })
+        console.log("all tracks added")
+        console.log("screenshare myPeer", myPeerConnection)
+      }
+      catch (err) {
+        handleGetUserMediaError(err)
+      }
     }
-    var localStream;
-    navigator.mediaDevices.getDisplayMedia(mediaConstraints).then(stream => {
-      localStream = stream;
-      localScreenStreamRef.current.srcObject = localStream
 
-      console.log("sender's stream", localStream)
-      // stream.getTracks().forEach(track => myPeerConnection?.addTrack(track, stream))
-      localStream.getTracks().forEach(track => {
-        myPeerConnection?.addTrack(track, localStream)
-        console.log("sender's track", track)
-
-      });
-      console.log("all tracks added")
-
-    }).catch(handleGetUserMediaError);
   }
 
   function handleGetUserMediaError(e) {
@@ -481,26 +397,35 @@ export default function Chat() {
     closeVideoCall();
   }
 
-  const handleNegotiationNeededEvent = () => {
+  const handleNegotiationNeededEvent = async () => {
     console.log("starting negotiation")
+    try {
+      const offer = await myPeerConnection.createOffer()
+      await myPeerConnection.setLocalDescription(offer);
+      socket.emit("sendVideoOffer", sender, receiver, myPeerConnection.localDescription)
+      console.log("peerConnection after negot", myPeerConnection)
+    }
+    catch (err) {
+      reportError(err)
+    }
 
-    myPeerConnection?.createOffer().then(function (offer) {
-      if (myPeerConnection.signalingState != "stable") {
-        console.log("connection unstable, should return")
-      }
-      return myPeerConnection?.setLocalDescription(offer);
-    })
-      .then(function () {
-        socket.emit("sendVideoOffer", sender, receiver, myPeerConnection?.localDescription)
-        // sendToServer({
-        //   name: sender,
-        //   target: receiver,
-        // type: "video-offer",
-        //   sdp: myPeerConnection.localDescription
-        // });
-        console.log("offer sent")
-      })
-      .catch(reportError);
+    // myPeerConnection?.createOffer().then(function (offer) {
+    //   if (myPeerConnection.signalingState != "stable") {
+    //     console.log("connection unstable, should return")
+    //   }
+    //   return myPeerConnection?.setLocalDescription(offer);
+    // })
+    //   .then(function () {
+    //     socket.emit("sendVideoOffer", sender, receiver, myPeerConnection?.localDescription)
+    //     // sendToServer({
+    //     //   name: sender,
+    //     //   target: receiver,
+    //     // type: "video-offer",
+    //     //   sdp: myPeerConnection.localDescription
+    //     // });
+    //     console.log("offer sent")
+    //   })
+    //   .catch(reportError);
   }
 
   function reportError(errMessage) {
@@ -511,15 +436,8 @@ export default function Chat() {
     console.log("handleICECandidateEvent")
 
     if (event.candidate) {
-      // console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
       console.log("*** Outgoing ICE candidate: ");
-
       socket.emit("sendNewIceCandidate", receiver, event.candidate)
-      // sendToServer({
-      //   type: "new-ice-candidate",
-      //   target: targetUsername,
-      //   candidate: event.candidate
-      // });
     }
   }
 
@@ -595,12 +513,12 @@ export default function Chat() {
             )}
           </List>
           <Typography>Local screen</Typography>
-          <video width="100%" height="250" autoPlay playsInline ref={localScreenStreamRef}
+          <video width="100%" height="250" autoPlay playsInline controls="false" ref={localScreenStreamRef}
 
           ></video>
           <Typography>Remote screen</Typography>
 
-          <video width="100%" height="250" autoPlay playsInline ref={remoteScreenStreamRef}
+          <video width="100%" height="250" autoPlay playsInline controls="false" ref={remoteScreenStreamRef}
 
           ></video>
 
