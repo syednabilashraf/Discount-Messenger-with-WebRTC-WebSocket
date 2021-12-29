@@ -79,11 +79,11 @@ const useStyles = makeStyles({
 
 
 export default function Chat() {
-  let socketInstance = null;
+  let socket;
+  let myPeerConnection
   console.log("starting")
 
   const [textMessage, setTextMessage] = useState('')
-  const [socket, setSocket] = useState()
   const [messages, setMessages] = useState([])
   const [screenStream, setScreenStream] = useState("")
   const localScreenStreamRef = useRef()
@@ -103,26 +103,50 @@ export default function Chat() {
     ]
     // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
   }
-  const  myPeerConnection = new RTCPeerConnection(stunServers)
-
-
-
-
-
-
-
 
   useEffect(() => {
-    console.log('here')
+    console.log("rendering")
+    myPeerConnection = new RTCPeerConnection(stunServers)
     const jwt = auth.isAuthenticated()
     const user = jwt?.user
-    socketInstance = io('http://localhost:3000/', {
+    socket = io('http://localhost:3000/', {
       auth: {
         user
       }
     });
-    setSocket(socketInstance)
+    console.log("socket", socket)
     // const jwt = auth.isAuthenticated()
+
+    socket.on('connect', () => {
+      console.log('connected')
+    })
+
+    socket.on('receiveMessage', (message) => {
+      // console.log(messages.concat(message))
+      setMessages(messages.concat(message))
+      console.log(messages)
+    })
+
+    socket.on('receiveVideoOffer', handleVideoOfferMsg)
+
+    socket.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
+
+    socket.on('receiveHangUp', () => { closeVideoCall() })
+
+    socket.on('receiveVideoAnswer', handleReceiveVideoAnswer)
+
+    const handleReceiverSelection = (user) => () => {
+      console.log(sender, user._id)
+      if (sender != user._id) {
+        socket.emit('getMessages', sender, user._id, (messages) => {
+          console.log('messages', messages)
+          setMessages(messages)
+        })
+        console.log('clicked', user)
+        setReceiver(user._id)
+      }
+    }
+
     list().then(data => {
       console.log(data)
       setUsers(data)
@@ -246,25 +270,6 @@ export default function Chat() {
     }
   }
 
-  if (socket) {
-    socket.on('connect', () => {
-      console.log('connected')
-    })
-
-    socket.on('receiveMessage', (message) => {
-      // console.log(messages.concat(message))
-      setMessages(messages.concat(message))
-      console.log(messages)
-    })
-
-    socket.on('receiveVideoOffer', handleVideoOfferMsg)
-
-    socket.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
-
-    socket.on('receiveHangUp', () => { closeVideoCall() })
-
-    socket.on('receiveVideoAnswer', handleReceiveVideoAnswer)
-  }
 
   const handleSendMessage = () => {
     console.log(messages)
@@ -320,17 +325,7 @@ export default function Chat() {
 
 
 
-  const handleReceiverSelection = (user) => () => {
-    console.log(sender, user._id)
-    if (sender != user._id) {
-      socket.emit('getMessages', sender, user._id, (messages) => {
-        console.log('messages', messages)
-        setMessages(messages)
-      })
-      console.log('clicked', user)
-      setReceiver(user._id)
-    }
-  }
+
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0]
