@@ -83,14 +83,27 @@ const useStyles = makeStyles({
 console.log("yeehoo")
 
 export default function Chat() {
-  const [myPeerConnection,setMyPeerConnection] = useState()
   console.log("starting")
-
+  const myPeerConnection = useRef()
+  const socket = useRef()
   const [textMessage, setTextMessage] = useState('')
   const [messages, setMessages] = useState([])
   const [screenStream, setScreenStream] = useState("")
   const localScreenStreamRef = useRef()
   const remoteScreenStreamRef = useRef()
+  const classes = useStyles()
+
+  const [users, setUsers] = useState([])
+
+  const [sender, setSender] = useState('')
+  const [receiver, setReceiver] = useState('')
+  const mediaConstraints = {
+    video: {
+      cursor: 'always' | 'motion' | 'never',
+      displaySurface: 'application' | 'browser' | 'monitor' | 'window'
+
+    }
+  }
   const stunServers = {
     iceServers: [
       // {
@@ -106,28 +119,27 @@ export default function Chat() {
     ]
     // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
   }
-  const [socket, setSocket] = useState()
 
   const handleVideoOfferMsg = async (senderId, receiverId, sdp) => {
     console.log("received video offer")
     createPeerConnection()
-    await myPeerConnection.setRemoteDescription(sdp);
+    await myPeerConnection.current.setRemoteDescription(sdp);
     console.log("remote desc set", sdp)
     // const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
     // stream.getTracks().forEach(track => {
     //   myPeerConnection.addTrack(track, stream)
     // })
-    const answer = await myPeerConnection.createAnswer();
+    const answer = await myPeerConnection.current.createAnswer();
     console.log("answer created")
-    await myPeerConnection.setLocalDescription(answer);
-    socket.emit("sendVideoAnswer", receiverId, senderId, myPeerConnection.localDescription)
+    await myPeerConnection.current.setLocalDescription(answer);
+    socket.current.emit("sendVideoAnswer", receiverId, senderId, myPeerConnection.current.localDescription)
     console.log("sdp sent to caller")
   }
 
   const handleReceiveNewIceCandidate = async (candidate) => {
     // var iceCandidate = new RTCIceCandidate(candidate)
     try {
-      await myPeerConnection.addIceCandidate(candidate)
+      await myPeerConnection.current.addIceCandidate(candidate)
       console.log("adding IceCandidate", candidate)
 
     }
@@ -144,10 +156,10 @@ export default function Chat() {
 
     // var desc = new RTCSessionDescription(sdp);
     try {
-      if (myPeerConnection.localDescription) {
+      if (myPeerConnection.current.localDescription) {
         console.log("myPeerConnection", myPeerConnection)
-        await myPeerConnection.setRemoteDescription(sdp)
-        console.log("remote desc added", myPeerConnection)
+        await myPeerConnection.current.setRemoteDescription(sdp)
+        console.log("remote desc added", myPeerConnection.current)
       }
     }
     catch (err) {
@@ -157,36 +169,36 @@ export default function Chat() {
   useEffect(() => {
     console.log("rendering")
 
+    myPeerConnection.current = new RTCPeerConnection(stunServers)
 
     // const jwt = auth.isAuthenticated()
 
     const jwt = auth.isAuthenticated();
     const user = jwt?.user;
 
-    const socketInstance = io('http://localhost:3000/', {
+    socket.current = io('http://localhost:3000/', {
       auth: {
         user
       }
     })
 
-    socketInstance.on('connect', () => {
+    socket.current.on('connect', () => {
       console.log('connected')
     })
-  
-    socketInstance.on('receiveMessage', (message) => {
+
+    socket.current.on('receiveMessage', (message) => {
       // console.log(messages.concat(message))
       setMessages(messages.concat(message))
       console.log(messages)
     })
-  
-    socketInstance.on('receiveVideoOffer', handleVideoOfferMsg)
-  
-    socketInstance.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
-  
-    socketInstance.on('receiveHangUp', () => { closeVideoCall() })
-  
-    socketInstance.on('receiveVideoAnswer', handleReceiveVideoAnswer)
-    setSocket(socketInstance)
+
+    socket.current.on('receiveVideoOffer', handleVideoOfferMsg)
+
+    socket.current.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
+
+    socket.current.on('receiveHangUp', () => { closeVideoCall() })
+
+    socket.current.on('receiveVideoAnswer', handleReceiveVideoAnswer)
     list().then(data => {
       console.log(data)
       setUsers(data.filter((u) => {
@@ -199,7 +211,6 @@ export default function Chat() {
 
     console.log(user)
 
-  
 
 
 
@@ -213,8 +224,10 @@ export default function Chat() {
 
   const handleReceiverSelection = (user) => () => {
     console.log(sender, user._id)
+    console.log("sender", sender)
+    console.log("receiver", receiver)
     if (sender != user._id) {
-      socket?.emit('getMessages', sender, user._id, (messages) => {
+      socket.current.emit('getMessages', sender, user._id, (messages) => {
         console.log('messages', messages)
         setMessages(messages)
       })
@@ -292,7 +305,7 @@ export default function Chat() {
       createdAt: Date.now()
 
     }
-    socket?.emit('sendMessage', messageDetails)
+    socket.current.emit('sendMessage', messageDetails)
     setMessages([...messages, messageDetails])
     setTextMessage('')
   }
@@ -301,19 +314,7 @@ export default function Chat() {
     setTextMessage(e.target.value)
   }
 
-  const classes = useStyles()
 
-  const [users, setUsers] = useState([])
-
-  const [sender, setSender] = useState('')
-  const [receiver, setReceiver] = useState('')
-  const mediaConstraints = {
-    video: {
-      cursor: 'always' | 'motion' | 'never',
-      displaySurface: 'application' | 'browser' | 'monitor' | 'window'
-
-    }
-  }
   // const sample = [{
   //   senderId: 1,
   //   receiverId: 2,
@@ -339,22 +340,21 @@ export default function Chat() {
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0]
-    socket?.emit('fileUpload', file)
+    socket.current.emit('fileUpload', file)
   }
-
 
 
   const createPeerConnection = () => {
 
-    const peerConnection = new RTCPeerConnection(stunServers)
-    peerConnection.onicecandidate = handleICECandidateEvent;
-    peerConnection.ontrack = handleTrackEvent;
-    peerConnection.onnegotiationneeded = handleNegotiationNeededEvent;
+    myPeerConnection.current.onicecandidate = handleICECandidateEvent;
+    myPeerConnection.current.ontrack = handleTrackEvent;
+    myPeerConnection.current.onnegotiationneeded = handleNegotiationNeededEvent;
     // myPeerConnection.onremovetrack = handleRemoveTrackEvent;
-    peerConnection.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
-    peerConnection.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
-    peerConnection.onsignalingstatechange = handleSignalingStateChangeEvent;
-    setMyPeerConnection(peerConnection);
+    myPeerConnection.current.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
+    myPeerConnection.current.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
+    myPeerConnection.current.onsignalingstatechange = handleSignalingStateChangeEvent;
+
+
 
   }
   const handleScreenShare = async (e) => {
@@ -372,10 +372,10 @@ export default function Chat() {
         const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
         localScreenStreamRef.current.srcObject = stream;
         stream.getTracks().forEach((track) => {
-          myPeerConnection.addTrack(track, stream);
+          myPeerConnection.current.addTrack(track, stream);
         })
         console.log("all tracks added")
-        console.log("screenshare myPeer", myPeerConnection)
+        console.log("screenshare myPeer", myPeerConnection.current)
       }
       catch (err) {
         handleGetUserMediaError(err)
@@ -404,12 +404,12 @@ export default function Chat() {
   }
 
   const handleNegotiationNeededEvent = async () => {
-    console.log("starting negotiation")
+    console.log("starting negotiation", sender, receiver)
     try {
-      const offer = await myPeerConnection.createOffer()
-      await myPeerConnection.setLocalDescription(offer);
-      socket?.emit("sendVideoOffer", sender, receiver, myPeerConnection.localDescription)
-      console.log("peerConnection after negot", myPeerConnection)
+      const offer = await myPeerConnection.current.createOffer()
+      await myPeerConnection.current.setLocalDescription(offer);
+      socket.current.emit("sendVideoOffer", sender, receiver, myPeerConnection.current.localDescription)
+      console.log("peerConnection after negot", myPeerConnection.current.current)
     }
     catch (err) {
       reportError(err)
@@ -443,7 +443,7 @@ export default function Chat() {
 
     if (event.candidate) {
       console.log("*** Outgoing ICE candidate: ");
-      socket?.emit("sendNewIceCandidate", receiver, event.candidate)
+      socket.current.emit("sendNewIceCandidate", receiver, event.candidate)
     }
   }
 
@@ -459,9 +459,9 @@ export default function Chat() {
   }
 
   function handleICEConnectionStateChangeEvent(event) {
-    console.log("*** ICE connection state changed to " + myPeerConnection?.iceConnectionState);
+    console.log("*** ICE connection state changed to " + myPeerConnection.current?.iceConnectionState);
 
-    switch (myPeerConnection?.iceConnectionState) {
+    switch (myPeerConnection.current?.iceConnectionState) {
       case "closed":
       case "failed":
       case "disconnected":
@@ -480,12 +480,12 @@ export default function Chat() {
 
 
   function handleICEGatheringStateChangeEvent(event) {
-    console.log("*** ICE gathering state changed to: " + myPeerConnection?.iceGatheringState);
+    console.log("*** ICE gathering state changed to: " + myPeerConnection.current?.iceGatheringState);
   }
 
   function handleSignalingStateChangeEvent(event) {
-    console.log("*** WebRTC signaling state changed to: " + myPeerConnection?.signalingState);
-    switch (myPeerConnection?.signalingState) {
+    console.log("*** WebRTC signaling state changed to: " + myPeerConnection.current?.signalingState);
+    switch (myPeerConnection.current?.signalingState) {
       case "closed":
         closeVideoCall();
         break;
@@ -494,10 +494,10 @@ export default function Chat() {
 
   const handleStopScreenShare = () => {
     closeVideoCall()
-    socket?.emit('sendHangUp', sender, receiver)
+    socket.current.emit('sendHangUp', sender, receiver)
   }
 
-  
+
 
   return (
     <div>
@@ -511,7 +511,7 @@ export default function Chat() {
         <Grid item xs={2} className={classes.borderRight500}>
           <List>
             {users.map((user, index) =>
-            
+
               <ListItem key={index} onClick={handleReceiverSelection(user)}>
                 <ListItemIcon>
                   <Avatar alt="Remy Sharp" src="https://material-ui.com/static/images/avatar/1.jpg" />
