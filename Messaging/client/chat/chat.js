@@ -125,10 +125,11 @@ export default function Chat() {
     createPeerConnection()
     await myPeerConnection.current.setRemoteDescription(sdp);
     console.log("remote desc set", sdp)
-    // const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
-    // stream.getTracks().forEach(track => {
-    //   myPeerConnection.addTrack(track, stream)
-    // })
+    const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+    stream.getTracks().forEach(track => {
+      myPeerConnection.current.addTrack(track, stream)
+    })
+    localScreenStreamRef.current.srcObject = stream
     const answer = await myPeerConnection.current.createAnswer();
     console.log("answer created")
     await myPeerConnection.current.setLocalDescription(answer);
