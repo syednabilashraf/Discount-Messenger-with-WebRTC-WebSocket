@@ -92,7 +92,7 @@ export default function Chat() {
   const localScreenStreamRef = useRef()
   const remoteScreenStreamRef = useRef()
   const classes = useStyles()
-
+  const dataChannel = useRef()
   const [users, setUsers] = useState([])
 
   const [sender, setSender] = useState('')
@@ -120,9 +120,22 @@ export default function Chat() {
     // "iceServers": [{ "url": "stun:stun.1.google.com:19302" }]
   }
 
+  const handleFileOfferMsg = async (senderId, receiverId, sdp) => {
+    console.log("received file offer");
+    createPeerConnectionForFile();
+    await myPeerConnection.current.setRemoteDescription(sdp);
+    console.log("remote desc set");
+    // createDataChannel()
+    const answer = await myPeerConnection.current.createAnswer();
+    console.log("answer created")
+    await myPeerConnection.current.setLocalDescription(answer);
+    socket.current.emit("sendFileAnswer", receiverId, senderId, myPeerConnection.current.localDescription)
+    console.log("sdp sent to caller")
+  }
+
   const handleVideoOfferMsg = async (senderId, receiverId, sdp) => {
     console.log("received video offer")
-    createPeerConnection()
+    createPeerConnectionForVideo()
     await myPeerConnection.current.setRemoteDescription(sdp);
     console.log("remote desc set", sdp)
     const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints);
@@ -167,12 +180,47 @@ export default function Chat() {
       reportError(err)
     }
   }
+  const handleReceiveFileAnswer = async (sender, receiver, sdp) => {
+    console.log("*** Call recipient accepted our file");
+    try {
+      if (myPeerConnection.current.localDescription) {
+        console.log("myPeerConnection", myPeerConnection)
+        await myPeerConnection.current.setRemoteDescription(sdp)
+        console.log("remote desc added", myPeerConnection.current)
+      }
+    }
+    catch (err) {
+      reportError(err)
+    }
+  }
+
+  const handleDataChannel = async (e) => {
+    console.log("datachannel received")
+    dataChannel.current = e.channel
+    console.log("data channel ", dataChannel.current);
+
+    dataChannel.current.onerror = function (error) {
+      console.log("DC Error:", error);
+    };
+
+    dataChannel.current.onmessage = function (event) {
+      console.log("DC Message:", event.data);
+    };
+
+    dataChannel.current.onopen = function () {
+      console.log("sending data")
+      dataChannel.current.send(" Sending 123 ");  // you can add file here in either strings/blob/array bufers almost anyways
+    };
+
+    dataChannel.current.onclose = function () {
+      console.log("DC is Closed");
+    };
+  }
+
   useEffect(() => {
     console.log("rendering")
 
     myPeerConnection.current = new RTCPeerConnection(stunServers)
-
-    // const jwt = auth.isAuthenticated()
 
     const jwt = auth.isAuthenticated();
     const user = jwt?.user;
@@ -200,6 +248,8 @@ export default function Chat() {
     socket.current.on('receiveHangUp', () => { closeVideoCall() })
 
     socket.current.on('receiveVideoAnswer', handleReceiveVideoAnswer)
+    socket.current.on('receiveFileOffer', handleFileOfferMsg);
+    socket.current.on('receiveFileAnswer', handleReceiveFileAnswer)
     list().then(data => {
       console.log(data)
       setUsers(data.filter((u) => {
@@ -217,7 +267,7 @@ export default function Chat() {
 
 
     return function cleanup() {
-      socket.disconnect()
+      socket.current.disconnect()
     }
   }, [])
 
@@ -336,16 +386,52 @@ export default function Chat() {
   // ]
 
 
+  const createDataChannel = () => {
+    dataChannel.current = myPeerConnection.current.createDataChannel("DC1");
+    console.log("channel created", dataChannel.current);
 
+    dataChannel.current.onerror = function (error) {
+      console.log("DC Error:", error);
+    };
 
+    dataChannel.current.onmessage = function (event) {
+      console.log("DC Message:", event.data);
+    };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0]
-    socket.current.emit('fileUpload', file)
+    dataChannel.current.onopen = function () {
+      console.log("sending data")
+      dataChannel.current.send(" Sending 123 ");  // you can add file here in either strings/blob/array bufers almost anyways
+    };
+
+    dataChannel.current.onclose = function () {
+      console.log("DC is Closed");
+    };
+
   }
 
 
-  const createPeerConnection = () => {
+
+  const handleFileUpload = async (e) => {
+
+    // var dataChannelOptions = {
+    //   ordered: false, // unguaranted sequence
+    //   maxRetransmitTime: 2000, // 2000 miliseconds is the maximum time to try and retrsanmit failed messages 
+    //   maxRetransmits : 5  // 5 is the number of times to try to retransmit failed messages , other options are negotiated , id , protocol   
+    // };
+
+    if (e.target.files.length > 0) {
+      createPeerConnectionForFile()
+      console.log("peer connection created", myPeerConnection.current)
+      const file = e.target.files[0]
+      console.log('e', file)
+      createDataChannel()
+      console.log("returned to fileupload after channel creation")
+    }
+    // socket.current.emit('fileUpload', file)
+  }
+
+
+  const createPeerConnectionForVideo = () => {
 
     myPeerConnection.current.onicecandidate = handleICECandidateEvent;
     myPeerConnection.current.ontrack = handleTrackEvent;
@@ -354,6 +440,26 @@ export default function Chat() {
     myPeerConnection.current.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
     myPeerConnection.current.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
     myPeerConnection.current.onsignalingstatechange = handleSignalingStateChangeEvent;
+
+
+
+
+
+  }
+
+
+  const createPeerConnectionForFile = () => {
+
+    myPeerConnection.current.onicecandidate = handleICECandidateEvent;
+    myPeerConnection.current.ontrack = handleTrackEvent;
+    myPeerConnection.current.onnegotiationneeded = handleNegotiationForFile;
+    // myPeerConnection.onremovetrack = handleRemoveTrackEvent;
+    myPeerConnection.current.oniceconnectionstatechange = handleICEConnectionStateChangeEvent;
+    myPeerConnection.current.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
+    myPeerConnection.current.onsignalingstatechange = handleSignalingStateChangeEvent;
+    // myPeerConnection.current.addEventListener('datachannel', handleDataChannel)
+    myPeerConnection.current.ondatachannel = handleDataChannel
+
 
 
 
@@ -367,7 +473,7 @@ export default function Chat() {
       //create peerconnection
       //get stream and append all track in stream to the peerConnection
       //
-      createPeerConnection()
+      createPeerConnectionForVideo()
       console.log("Screen sharing")
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
@@ -405,7 +511,7 @@ export default function Chat() {
   }
 
   const handleNegotiationNeededEvent = async () => {
-    console.log("starting negotiation", sender, receiver)
+    console.log("starting negotiation for video", sender, receiver)
     try {
       const offer = await myPeerConnection.current.createOffer()
       await myPeerConnection.current.setLocalDescription(offer);
@@ -415,24 +521,19 @@ export default function Chat() {
     catch (err) {
       reportError(err)
     }
+  }
 
-    // myPeerConnection?.createOffer().then(function (offer) {
-    //   if (myPeerConnection.signalingState != "stable") {
-    //     console.log("connection unstable, should return")
-    //   }
-    //   return myPeerConnection?.setLocalDescription(offer);
-    // })
-    //   .then(function () {
-    //     socket.emit("sendVideoOffer", sender, receiver, myPeerConnection?.localDescription)
-    //     // sendToServer({
-    //     //   name: sender,
-    //     //   target: receiver,
-    //     // type: "video-offer",
-    //     //   sdp: myPeerConnection.localDescription
-    //     // });
-    //     console.log("offer sent")
-    //   })
-    //   .catch(reportError);
+  const handleNegotiationForFile = async () => {
+    console.log("starting negotiation for file", sender, receiver)
+    try {
+      const offer = await myPeerConnection.current.createOffer()
+      await myPeerConnection.current.setLocalDescription(offer);
+      socket.current.emit("sendFileOffer", sender, receiver, myPeerConnection.current.localDescription)
+      console.log("peerConnection after negot", myPeerConnection.current)
+    }
+    catch (err) {
+      reportError(err)
+    }
   }
 
   function reportError(errMessage) {
@@ -568,9 +669,9 @@ export default function Chat() {
               <Fab color="primary"
               >
                 <label htmlFor='uploadButton'>
-                  <input type="file" style={{ display: 'none' }} id="uploadButton" />
+                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} id="uploadButton" />
 
-                  <AttachFileIcon onClick={handleFileUpload} /></label>
+                  <AttachFileIcon /></label>
               </Fab>
 
               <Fab color="primary" aria-label="add" onClick={handleScreenShare}><ScreenShareIcon /></Fab>

@@ -32,6 +32,7 @@ const messageHandlers = (io, socket) => {
     }
 
     const handleFileUpload = async (file) => {
+        console.log("file")
         console.log(file)
     }
 
@@ -43,7 +44,19 @@ const messageHandlers = (io, socket) => {
 
     const handleSendVideoAnswer = (sender, receiver, sdp) => {
         console.log(`sending video answer from${sender} to ${receiver}`)
-        io.to(receiver).emit('receiveVideoAnswer',sender, receiver,sdp)
+        io.to(receiver).emit('receiveVideoAnswer', sender, receiver, sdp)
+
+    }
+
+    const handleFileOffer = (sender, receiver, sdp) => {
+        console.log(`sending File offer from${sender} to ${receiver}`)
+        io.in(receiver).emit('receiveFileOffer', sender, receiver, sdp)
+
+    }
+
+    const handleFileAnswer = (sender, receiver, sdp) => {
+        console.log(`sending File answer from${sender} to ${receiver}`)
+        io.to(receiver).emit('receiveFileAnswer', sender, receiver, sdp)
 
     }
 
@@ -68,12 +81,16 @@ const messageHandlers = (io, socket) => {
     socket.on('sendVideoAnswer', handleSendVideoAnswer)
     socket.on('sendNewIceCandidate', handleNewIceCandidate)
     socket.on('sendHangUp', handleSendHangUp)
+    socket.on('sendFileOffer', handleFileOffer)
+    socket.on('sendFileAnswer', handleFileAnswer)
 
 }
 
 export default messageHandlers
 
 /*
+video calling/screen sharing:
+
 ---caller side---
 
 create rtc peerConnection with iceServers and add all event handlers (createPeerconnection)
@@ -108,12 +125,13 @@ caller receives {localDescription,targetId}
 caller creates RTCSessionDescription object with receivers sdp
 set object as remoteDescription for peerConnection
 
+*/
 
-
-
-
-
-
+/*
+file sharing:
+--sharer side--
+create rtcpeerconnection
+create data channel with that connection
 
 */
 
