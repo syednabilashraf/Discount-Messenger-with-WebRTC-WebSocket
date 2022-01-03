@@ -197,6 +197,7 @@ export default function Chat() {
   const handleDataChannel = async (e) => {
     console.log("datachannel received")
     dataChannel.current = e.channel
+    dataChannel.current.binaryType = "arraybuffer"
     console.log("data channel ", dataChannel.current);
 
     dataChannel.current.onerror = function (error) {
@@ -205,6 +206,13 @@ export default function Chat() {
 
     dataChannel.current.onmessage = function (event) {
       console.log("DC Message:", event.data);
+      const file = new Blob([event.data],{
+        type: 'image/png'
+      })
+      console.log("file", file)
+      const fileUrl = URL.createObjectURL(file)
+      window.open(fileUrl)
+
     };
 
     dataChannel.current.onopen = function () {
@@ -386,9 +394,46 @@ export default function Chat() {
   // ]
 
 
-  const createDataChannel = () => {
+  const createDataChannel = (file) => {
     dataChannel.current = myPeerConnection.current.createDataChannel("DC1");
+    dataChannel.current.binaryType = "arraybuffer"
     console.log("channel created", dataChannel.current);
+    console.log('file in create channel', file)
+    //file constraints
+    let fileSize = file.size;
+    let name = file.name;
+    let mime = file.type;
+    let chunkSize = 64 * 1024; // bytes
+    let offset = 0;
+
+    function readChunk() {
+      let fr = new FileReader()
+      let blob = file.slice(offset, chunkSize, + offset);
+
+      fr.onload = (e) => {
+        if (!e.target.error) {
+          offset += chunkSize; //offset for new chunk
+          console.log("sending: " + (offset / fileSize) * 100 + "%");
+          if (offset >= fileSize) { //last chunk
+            dataChannel.current.send(e.target.result);
+            console.log("sending", e.target.result)
+            console.log("done reading file " + name + " " + mime)
+            return;
+          }
+          else {
+            console.log("sending", e.target.result)
+            dataChannel.current.send(e.target.result)
+          }
+        }
+        else {
+          console.log("Read error: ", e.target.error)
+          return;
+        }
+        readChunk()
+
+      }
+      fr.readAsArrayBuffer(blob)
+    }
 
     dataChannel.current.onerror = function (error) {
       console.log("DC Error:", error);
@@ -400,7 +445,8 @@ export default function Chat() {
 
     dataChannel.current.onopen = function () {
       console.log("sending data")
-      dataChannel.current.send(" Sending 123 ");  // you can add file here in either strings/blob/array bufers almost anyways
+      readChunk()
+        ;  // you can add file here in either strings/blob/array bufers almost anyways
     };
 
     dataChannel.current.onclose = function () {
@@ -423,9 +469,10 @@ export default function Chat() {
       createPeerConnectionForFile()
       console.log("peer connection created", myPeerConnection.current)
       const file = e.target.files[0]
-      console.log('e', file)
-      createDataChannel()
+      createDataChannel(file)
       console.log("returned to fileupload after channel creation")
+
+
     }
     // socket.current.emit('fileUpload', file)
   }
