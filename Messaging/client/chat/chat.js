@@ -206,11 +206,9 @@ export default function Chat() {
 
     dataChannel.current.onmessage = function (event) {
       console.log("DC Message:", event.data);
-      const file = new Blob([event.data],{
-        type: 'image/png'
-      })
-      console.log("file", file)
-      const fileUrl = URL.createObjectURL(file)
+      const blob = new Blob([event.data])
+      console.log("file", blob)
+      const fileUrl = URL.createObjectURL(blob)
       window.open(fileUrl)
 
     };
@@ -408,8 +406,8 @@ export default function Chat() {
 
     function readChunk() {
       let fr = new FileReader()
-      let blob = file.slice(offset, chunkSize, + offset);
-
+      let blob = file.slice(offset, chunkSize + offset);
+      
       fr.onload = (e) => {
         if (!e.target.error) {
           offset += chunkSize; //offset for new chunk
@@ -443,9 +441,11 @@ export default function Chat() {
       console.log("DC Message:", event.data);
     };
 
-    dataChannel.current.onopen = function () {
+    dataChannel.current.onopen = async function () {
       console.log("sending data")
-      readChunk()
+      // readChunk()
+      const arrayBuffer = await file.arrayBuffer();
+      dataChannel.current.send(arrayBuffer)
         ;  // you can add file here in either strings/blob/array bufers almost anyways
     };
 
