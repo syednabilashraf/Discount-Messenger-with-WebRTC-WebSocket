@@ -203,13 +203,24 @@ export default function Chat() {
     dataChannel.current.onerror = function (error) {
       console.log("DC Error:", error);
     };
+    const arrayBuffer = []
 
     dataChannel.current.onmessage = function (event) {
       console.log("DC Message:", event.data);
-      const blob = new Blob([event.data])
-      console.log("file", blob)
-      const fileUrl = URL.createObjectURL(blob)
-      window.open(fileUrl)
+      if (event.data == "finished") {
+        const blob = new Blob(arrayBuffer)
+        console.log("file", blob)
+        const fileUrl = URL.createObjectURL(blob)
+        window.open(fileUrl)
+      }
+      else {
+        arrayBuffer.push(event.data)
+      }
+      // const data = JSON.parse(event.data)
+      // const blob = new Blob([data.buffer])
+      // console.log("file", blob)
+      // const fileUrl = URL.createObjectURL(blob)
+      // window.open(fileUrl)
 
     };
 
@@ -251,7 +262,10 @@ export default function Chat() {
 
     socket.current.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
 
-    socket.current.on('receiveHangUp', () => { closeVideoCall() })
+    socket.current.on('receiveHangUp', () => { 
+      console.log("received hangup")
+      closeVideoCall() 
+    })
 
     socket.current.on('receiveVideoAnswer', handleReceiveVideoAnswer)
     socket.current.on('receiveFileOffer', handleFileOfferMsg);
@@ -300,22 +314,22 @@ export default function Chat() {
 
     // Close the RTCPeerConnection
 
-    if (myPeerConnection) {
+    if (myPeerConnection.current) {
       console.log("--> Closing the peer connection");
 
       // Disconnect all our event listeners; we don't want stray events
       // to interfere with the hangup while it's ongoing.
 
-      myPeerConnection.ontrack = null;
-      myPeerConnection.onnicecandidate = null;
-      myPeerConnection.oniceconnectionstatechange = null;
-      myPeerConnection.onsignalingstatechange = null;
-      myPeerConnection.onicegatheringstatechange = null;
-      myPeerConnection.onnotificationneeded = null;
+      myPeerConnection.current.ontrack = null;
+      myPeerConnection.current.onnicecandidate = null;
+      myPeerConnection.current.oniceconnectionstatechange = null;
+      myPeerConnection.current.onsignalingstatechange = null;
+      myPeerConnection.current.onicegatheringstatechange = null;
+      myPeerConnection.current.onnotificationneeded = null;
 
       // Stop all transceivers on the connection
 
-      myPeerConnection.getTransceivers().forEach(transceiver => {
+      myPeerConnection.current.getTransceivers().forEach(transceiver => {
         transceiver.stop();
       });
 
@@ -324,23 +338,26 @@ export default function Chat() {
       // on it.
 
       if (remoteScreenStreamRef.current.srcObject) {
-
+        console.log("stopping remote screen")
         remoteScreenStreamRef.current.srcObject.getTracks().forEach(track => {
           track.stop();
         });
+        remoteScreenStreamRef.current.srcObject = null
       }
 
       if (localScreenStreamRef.current.srcObject) {
-
+        console.log("stopping local screen")
         localScreenStreamRef.current.srcObject.getTracks().forEach(track => {
           track.stop();
         });
+        localScreenStreamRef.current.srcObject = null
+
       }
 
       // Close the peer connection
 
-      myPeerConnection.close();
-      myPeerConnection = null;
+      myPeerConnection.current.close();
+      myPeerConnection.current = null;
       // webcamStream = null;
     }
 
@@ -404,33 +421,49 @@ export default function Chat() {
     let chunkSize = 64 * 1024; // bytes
     let offset = 0;
 
-    function readChunk() {
-      let fr = new FileReader()
+    async function readChunk() {
+      // let fr = new FileReader()
       let blob = file.slice(offset, chunkSize + offset);
-      
-      fr.onload = (e) => {
-        if (!e.target.error) {
-          offset += chunkSize; //offset for new chunk
-          console.log("sending: " + (offset / fileSize) * 100 + "%");
-          if (offset >= fileSize) { //last chunk
-            dataChannel.current.send(e.target.result);
-            console.log("sending", e.target.result)
-            console.log("done reading file " + name + " " + mime)
-            return;
-          }
-          else {
-            console.log("sending", e.target.result)
-            dataChannel.current.send(e.target.result)
-          }
-        }
-        else {
-          console.log("Read error: ", e.target.error)
-          return;
-        }
-        readChunk()
+      let arrayBuffer = await blob.arrayBuffer();
+      offset = chunkSize + offset;
+      console.log("sending: " + (offset / fileSize) * 100 + "%");
 
+      if (offset >= fileSize) {
+        console.log("sending", arrayBuffer)
+        console.log("done reading file " + name + " " + mime)
+        dataChannel.current.send(arrayBuffer);
+        dataChannel.current.send("finished");
+        return;
       }
-      fr.readAsArrayBuffer(blob)
+      else {
+        console.log("sending", arrayBuffer)
+        dataChannel.current.send(arrayBuffer);
+        readChunk()
+      }
+
+      // fr.onload = (e) => {
+      //   if (!e.target.error) {
+      //     offset += chunkSize; //offset for new chunk
+      //     console.log("sending: " + (offset / fileSize) * 100 + "%");
+      //     if (offset >= fileSize) { //last chunk
+      //       dataChannel.current.send(e.target.result);
+      //       console.log("sending", e.target.result)
+      //       console.log("done reading file " + name + " " + mime)
+      //       return;
+      //     }
+      //     else {
+      //       console.log("sending", e.target.result)
+      //       dataChannel.current.send(e.target.result)
+      //     }
+      //   }
+      //   else {
+      //     console.log("Read error: ", e.target.error)
+      //     return;
+      //   }
+      //   readChunk()
+
+      // }
+      // fr.readAsArrayBuffer(blob)
     }
 
     dataChannel.current.onerror = function (error) {
@@ -443,10 +476,17 @@ export default function Chat() {
 
     dataChannel.current.onopen = async function () {
       console.log("sending data")
-      // readChunk()
       const arrayBuffer = await file.arrayBuffer();
-      dataChannel.current.send(arrayBuffer)
-        ;  // you can add file here in either strings/blob/array bufers almost anyways
+      for (let i = 0; i < arrayBuffer.byteLength; i += chunkSize) {
+        let bufferPart = arrayBuffer.slice(i, chunkSize + i)
+        dataChannel.current.send(bufferPart)
+      }
+      dataChannel.current.send("finished")
+
+      // readChunk()
+
+
+      // you can add file here in either strings/blob/array bufers almost anyways
     };
 
     dataChannel.current.onclose = function () {
