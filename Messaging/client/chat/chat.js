@@ -94,7 +94,7 @@ export default function Chat() {
   const classes = useStyles()
   const dataChannel = useRef()
   const [users, setUsers] = useState([])
-
+  const messagesEndRef = useRef()
   const [sender, setSender] = useState('')
   const [receiver, setReceiver] = useState('')
   const mediaConstraints = {
@@ -234,8 +234,23 @@ export default function Chat() {
     };
   }
 
+  const handleReceiveMessage = (message) => {
+    console.log("messages", messages)
+    scrollToBottom()
+    setMessages(messages.concat(message))
+  }
+
+  const scrollToBottom = () => {
+
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      // block: 'end',
+      // inline: 'nearest'
+    })
+  }
   useEffect(() => {
     console.log("rendering")
+    scrollToBottom()
 
     myPeerConnection.current = new RTCPeerConnection(stunServers)
 
@@ -252,44 +267,44 @@ export default function Chat() {
       console.log('connected')
     })
 
-    socket.current.on('receiveMessage', (message) => {
-      // console.log(messages.concat(message))
-      setMessages(messages.concat(message))
-      console.log(messages)
-    })
+    socket.current.on('receiveMessage', handleReceiveMessage)
 
     socket.current.on('receiveVideoOffer', handleVideoOfferMsg)
 
     socket.current.on('receiveNewIceCandidate', handleReceiveNewIceCandidate)
 
-    socket.current.on('receiveHangUp', () => { 
+    socket.current.on('receiveHangUp', () => {
       console.log("received hangup")
-      closeVideoCall() 
+      closeVideoCall()
     })
 
     socket.current.on('receiveVideoAnswer', handleReceiveVideoAnswer)
     socket.current.on('receiveFileOffer', handleFileOfferMsg);
     socket.current.on('receiveFileAnswer', handleReceiveFileAnswer)
-    list().then(data => {
-      console.log(data)
-      setUsers(data.filter((u) => {
-        return u._id != user._id
-      }))
-    })
+
     // const { user } = JSON.parse(sessionStorage.getItem('jwt'))
     setSender(user?._id)
 
 
     console.log(user)
 
-
-
-
-
     return function cleanup() {
       socket.current.disconnect()
     }
+  }, [messages])
+
+  useEffect(() => {
+    const jwt = auth.isAuthenticated();
+    const user = jwt?.user;
+    list().then(data => {
+      console.log(data)
+      setUsers(data.filter((u) => {
+        return u._id != user._id
+      }))
+    })
   }, [])
+
+
 
 
 
@@ -528,10 +543,6 @@ export default function Chat() {
     myPeerConnection.current.onicegatheringstatechange = handleICEGatheringStateChangeEvent;
     myPeerConnection.current.onsignalingstatechange = handleSignalingStateChangeEvent;
 
-
-
-
-
   }
 
 
@@ -546,9 +557,6 @@ export default function Chat() {
     myPeerConnection.current.onsignalingstatechange = handleSignalingStateChangeEvent;
     // myPeerConnection.current.addEventListener('datachannel', handleDataChannel)
     myPeerConnection.current.ondatachannel = handleDataChannel
-
-
-
 
   }
   const handleScreenShare = async (e) => {
@@ -743,6 +751,7 @@ export default function Chat() {
                 </Grid>
               </ListItem>
             })}
+            <div ref={messagesEndRef} ></div>
 
           </List>
           <Divider />
@@ -766,6 +775,7 @@ export default function Chat() {
 
 
               <Fab color="primary" aria-label="add" onClick={handleSendMessage}><SendIcon /></Fab>
+              <Fab color="primary" aria-label="add" onClick={scrollToBottom}><SendIcon /></Fab>
 
             </Grid>
           </Grid>
