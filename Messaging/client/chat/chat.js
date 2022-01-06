@@ -257,7 +257,7 @@ export default function Chat() {
     const jwt = auth.isAuthenticated();
     const user = jwt?.user;
 
-    socket.current = io('http://localhost:3000/', {
+    socket.current = io('/', {
       auth: {
         user
       }
@@ -774,7 +774,6 @@ export default function Chat() {
 
 
               <Fab color="primary" aria-label="add" onClick={handleSendMessage}><SendIcon /></Fab>
-              <Fab color="primary" aria-label="add" onClick={scrollToBottom}><SendIcon /></Fab>
 
             </Grid>
           </Grid>
