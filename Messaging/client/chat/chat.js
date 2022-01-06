@@ -304,7 +304,7 @@ export default function Chat() {
     })
   }, [])
 
-
+console.log("sup")
 
 
 
