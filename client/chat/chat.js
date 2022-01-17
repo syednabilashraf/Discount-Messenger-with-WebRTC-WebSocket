@@ -3,7 +3,6 @@ import { makeStyles } from '@material-ui/core/styles'
 import Card from '@material-ui/core/Card'
 import CardContent from '@material-ui/core/CardContent'
 import CardMedia from '@material-ui/core/CardMedia'
-import unicornbikeImg from './../assets/images/unicornbike.jpg'
 import Paper from '@material-ui/core/Paper';
 import Grid from '@material-ui/core/Grid';
 import Box from '@material-ui/core/Box';
@@ -700,7 +699,7 @@ export default function Chat() {
 
       <Grid container>
         <Grid item xs={12} >
-          <Typography variant="h5" className="header-message">TechHack</Typography>
+          <Typography variant="h5" className="header-message">People</Typography>
         </Grid>
       </Grid>
       <Grid container component={Paper} className={classes.chatSection}>

@@ -20,7 +20,7 @@
   "scripts": {
     "development": "nodemon",
     "build": "webpack --config webpack.config.client.production.js && webpack --mode=production --config webpack.config.server.js",
-    "start": "node ./dist/server.generated.js"
+    "start": "NODE_ENV=production node ./dist/server.generated.js"
   },
   "engines": {
     "node": "13.12.0",
@@ -58,13 +58,7 @@
     "react-hot-loader": "4.12.20",
     "react-router": "5.1.2",
     "react-router-dom": "5.1.2",
-    "socket.io": "^4.4.0",
-    "socket.io-client": "^4.4.0",
-    "webpack": "4.42.1",
-    "webpack-cli": "3.3.11",
-    "webpack-dev-middleware": "3.7.2",
-    "webpack-hot-middleware": "2.25.0",
-    "webpack-node-externals": "1.7.2"
-
+    "socket.io": "^4.4.1",
+    "socket.io-client": "^4.4.1"
   }
 }
