@@ -19,7 +19,7 @@
   "main": "./dist/server.generated.js",
   "scripts": {
     "development": "nodemon",
-    "start": "node ./dist/server.generated.js"
+    "start": "npm run development"
   },
   "engines": {
     "node": "13.12.0",
