@@ -19,7 +19,6 @@
   "main": "./dist/server.generated.js",
   "scripts": {
     "development": "nodemon",
-    "build": "webpack --config webpack.config.client.production.js && webpack --mode=production --config webpack.config.server.js",
     "start": "node ./dist/server.generated.js"
   },
   "engines": {
@@ -50,9 +49,11 @@
     "express": "4.17.1",
     "express-jwt": "5.3.1",
     "helmet": "3.22.0",
+    "heroku": "^7.59.2",
     "jsonwebtoken": "8.5.1",
     "lodash": "4.17.15",
     "mongoose": "5.9.7",
+    "nodemon": "2.0.2",
     "react": "16.13.1",
     "react-dom": "16.13.1",
     "react-hot-loader": "4.12.20",
@@ -60,7 +61,6 @@
     "react-router-dom": "5.1.2",
     "socket.io": "^4.4.1",
     "socket.io-client": "^4.4.1",
-    "nodemon": "2.0.2",
     "webpack": "4.42.1",
     "webpack-cli": "3.3.11",
     "webpack-dev-middleware": "3.7.2",
